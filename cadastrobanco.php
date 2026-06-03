@@ -3,29 +3,31 @@
     $usuario = $_POST["usuario"];
     $senha = $_POST["senha"];
 
-    /*
-    //abrir banco de dados:
-    $host_bd = "localhost";
-    $login_bd = "root";
-    $password_bd = "";
-    $nome_bd = "labdbprog2";
-    $port = 3307;*/
-
     //zerar as sessões:
     session_start();
     $_SESSION["cod_usuario"] = "";
     
-    //$conexao_bd = mysqli_connect($host_bd, $login_bd, $password_bd,$nome_bd, $port);
-    //$conectar = mysql_select_db($nome_bd, $conexao_bd);
-
     //conferir se o usuário está preenchido
     //conferir se a senha está preenchida
     if(strlen($usuario) > 0 && strlen($senha) > 0){
+        
+        // 1. Prepara a query
         $sql = "SELECT * FROM usuario WHERE username = '$usuario'";
         
-        $result = mysqli_query($conexao_bd,$sql); //pega o resultado da query e lança num array
+        // 2. EXECUTAR A QUERY PRIMEIRO (Cria a variável $result)
+        $result = mysqli_query($conexao_bd, $sql); 
+
+        // 3. --- CÓDIGO DE DIAGNÓSTICO (RAIO-X) ---
+        if (!$result) {
+            die("🚨 Erro do MySQL: " . mysqli_error($conexao_bd));
+        }
+        echo "<h3>Raio-X do Banco:</h3>";
+        echo "🔍 Query gerada: " . $sql . "<br>";
+        echo "📊 Linhas encontradas: " . mysqli_num_rows($result) . "<hr>";
+        // ---------------------------------------
         
-        if($consulta = mysqli_fetch_assoc($result)){ //leitura do array
+        // 4. Continua com a leitura dos dados
+        if($consulta = mysqli_fetch_assoc($result)){ 
             $cod_usuario = $consulta['cod_usuario'];
             $nome        = $consulta['nome'];
             $password    = $consulta['pass'];
@@ -37,11 +39,9 @@
                 //usuário autenticado!
                 $_SESSION["cod_usuario"] = $cod_usuario;
                 header("location:principal.php");
-                //echo("Conectou!");
             }else{
                 //usuário não autenticado
                 header("location:index.php");
-                //echo("Não conectou :(");
             }
         }else{
             echo "‼ Não achei o usuário!!!";
@@ -49,11 +49,4 @@
     }else{
         echo "Não achei o usuário!!!";
     }
-    //validar no banco de dados
-    //ir para página autenticada
-    //ou retornar para index
-    /*
-    echo "Cadastrar no banco o $usuario com a $senha <br>";
-
-    echo "<a href='index.php'>Retornar</a>";*/
 ?>
