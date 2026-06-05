@@ -1,136 +1,281 @@
 <?php
-include 'conexao.php';
+session_start();
+require_once("conexao.php");
 
-// -----------------------------------------
-// LÓGICA DE EXCLUSÃO (DELETE)
-// -----------------------------------------
-if (isset($_GET['deletar'])) {
-    $id_para_deletar = $_GET['deletar'];
-    $sql_deletar = "DELETE FROM especialidades WHERE id = $id_para_deletar";
-    if (mysqli_query($conexao_bd, $sql_deletar)) {
-        echo "<script>alert('Especialidade excluída com sucesso!'); window.location.href='cadastro_especialidades.php';</script>";
-    } else {
-        echo "<script>alert('Erro ao excluir: " . mysqli_error($conexao_bd) . "');</script>";
-    }
+if(!isset($_SESSION['cod_usuario'])){
+    header("Location: login.php");
+    exit;
 }
 
-// -----------------------------------------
-// PREPARAÇÃO PARA A EDIÇÃO (Carregar dados no form)
-// -----------------------------------------
-$id_edicao = "";
-$nome_edicao = "";
-$modo_edicao = false;
-
-if (isset($_GET['editar'])) {
-    $modo_edicao = true;
-    $id_edicao = $_GET['editar'];
-    $sql_busca = "SELECT nome FROM especialidades WHERE id = $id_edicao";
-    $resultado_busca = mysqli_query($conexao_bd, $sql_busca);
-    if ($linha_busca = mysqli_fetch_assoc($resultado_busca)) {
-        $nome_edicao = $linha_busca['nome'];
+// Processamento do CRUD (POST e GET para exclusão)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $acao = $_POST['acao'] ?? '';
+    if ($acao === 'novo') {
+        $nome = $_POST['nome'];
+        $sql = "INSERT INTO especialidades (nome) VALUES ('$nome')";
+        mysqli_query($conexao_bd, $sql);
+    } elseif ($acao === 'editar') {
+        $id = (int)$_POST['id'];
+        $nome = $_POST['nome'];
+        $sql = "UPDATE especialidades SET nome = '$nome' WHERE id = $id";
+        mysqli_query($conexao_bd, $sql);
     }
+    header("Location: cadastro_especialidades.php");
+    exit;
 }
 
-// -----------------------------------------
-// LÓGICA DE CADASTRO (CREATE) E EDIÇÃO (UPDATE)
-// -----------------------------------------
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['salvar'])) {
-    $nome_especialidade = $_POST['nome_especialidade'];
-    
-    try {
-        if (isset($_POST['id_especialidade']) && !empty($_POST['id_especialidade'])) {
-            // É UMA EDIÇÃO (UPDATE)
-            $id_atualizar = $_POST['id_especialidade'];
-            $sql_salvar = "UPDATE especialidades SET nome = '$nome_especialidade' WHERE id = $id_atualizar";
-            $msg_sucesso = "Especialidade atualizada com sucesso!";
-        } else {
-            // É UM CADASTRO NOVO (INSERT)
-            $sql_salvar = "INSERT INTO especialidades (nome) VALUES ('$nome_especialidade')";
-            $msg_sucesso = "Especialidade cadastrada com sucesso!";
-        }
+if (isset($_GET['acao']) && $_GET['acao'] === 'excluir') {
+    $id = (int)$_GET['id'];
+    $sql = "DELETE FROM especialidades WHERE id = $id";
+    mysqli_query($conexao_bd, $sql);
+    header("Location: cadastro_especialidades.php");
+    exit;
+}
 
-        if (mysqli_query($conexao_bd, $sql_salvar)) {
-            echo "<script>alert('$msg_sucesso'); window.location.href='cadastro_especialidades.php';</script>";
-        }
-    } catch (mysqli_sql_exception $e) {
-        if ($e->getCode() == 1062) {
-            $mensagem = "<div class='alert alert-warning'>Atenção: Esta especialidade já está cadastrada no sistema!</div>";
-        } else {
-            $mensagem = "<div class='alert alert-danger'>Erro no banco de dados: " . $e->getMessage() . "</div>";
-        }
-    }
+// Buscar especialidades cadastradas
+$especialidades = [];
+$sqlBusca = "SELECT * FROM especialidades ORDER BY nome ASC";
+$result = mysqli_query($conexao_bd, $sqlBusca);
+while ($row = mysqli_fetch_assoc($result)) {
+    $especialidades[] = $row;
 }
 ?>
-
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Cadastro de Especialidades - MediAgenda</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>MediAgenda - Especialidades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --azul-primario: #0d6efd; --azul-escuro: #084298; --azul-claro: #e7f1ff; --cinza-fundo: #f5f7fa; --cinza-borda: #e3e6ea; --texto-escuro: #1f2d3d; --sidebar-larg: 250px; }
+        body { background-color: var(--cinza-fundo); font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .navbar-topo { background: linear-gradient(90deg, var(--azul-primario) 0%, var(--azul-escuro) 100%); height: 60px; position: fixed; top: 0; left: 0; right: 0; z-index: 1030; color: white;}
+        .sidebar { position: fixed; top: 60px; left: 0; width: var(--sidebar-larg); height: calc(100vh - 60px); background: #fff; border-right: 1px solid var(--cinza-borda); padding: 20px 0; }
+        .sidebar .nav-link { color: var(--texto-escuro); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.ativo { background: var(--azul-claro); border-left: 3px solid var(--azul-primario); color: var(--azul-escuro); font-weight: 600; }
+        .conteudo-principal { margin-top: 60px; margin-left: var(--sidebar-larg); padding: 25px; }
+        .card-pagina { background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; border: 1px solid var(--cinza-borda); }
+    </style>
 </head>
 <body>
-
-<div class="container mt-5">
-    <h2><?php echo $modo_edicao ? "Editar Especialidade" : "Gerenciar Especialidades"; ?></h2>
+    <nav class="navbar-topo d-flex align-items-center px-3">
+        <h4><i class="fa-solid fa-stethoscope"></i> MediAgenda</h4>
+    </nav>
     
-    <div class="mb-3">
-        <a href="principal.php" class="btn btn-secondary btn-sm">Voltar ao Menu</a>
-    </div>
+    <aside class="sidebar" id="sidebar">
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="principal.php"><i class="fa-solid fa-calendar-days"></i> Calendário</a></li>
+            <li class="nav-item"><a class="nav-link" href="cadastro_agendas.php"><i class="fa-solid fa-calendar-plus"></i> Agendamentos</a></li>
+            <li class="nav-item"><a class="nav-link" href="cadastro_medicos.php"><i class="fa-solid fa-user-doctor"></i> Cadastro de Médicos</a></li>
+            <li class="nav-item"><a class="nav-link ativo" href="cadastro_especialidades.php"><i class="fa-solid fa-list-check"></i> Cadastro de Especialidades</a></li>
+        </ul>
+    </aside>
 
-    <?php if(isset($mensagem)) echo $mensagem; ?>
+    <main class="conteudo-principal">
+        <div class="d-flex justify-content-between mb-4">
+            <h2><i class="fa-solid fa-list-check"></i> Especialidades</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFormEspecialidade" onclick="prepararNovo()"><i class="fa-solid fa-plus"></i> Nova Especialidade</button>
+        </div>
+        
+        <div class="card-pagina">
+            <table class="table table-hover">
+                <thead style="background: var(--azul-claro);">
+                    <tr><th>ID</th><th>Nome da Especialidade</th><th class="text-center">Ações</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($especialidades as $esp): ?>
+                    <tr>
+                        <td><?= $esp['id'] ?></td>
+                        <td><?= htmlspecialchars($esp['nome']) ?></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="prepararEdicao(<?= $esp['id'] ?>, '<?= htmlspecialchars($esp['nome'], ENT_QUOTES) ?>')" data-bs-toggle="modal" data-bs-target="#modalFormEspecialidade"><i class="fa-solid fa-pen"></i></button>
+                            <a href="cadastro_especialidades.php?acao=excluir&id=<?= $esp['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir especialidade?')"><i class="fa-solid fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </main>
 
-    <div class="card mb-4">
-        <div class="card-body">
-            <form method="POST" action="">
-                <input type="hidden" name="id_especialidade" value="<?php echo $id_edicao; ?>">
-                
-                <div class="mb-3">
-                    <label for="nome_especialidade" class="form-label">Nome da Especialidade</label>
-                    <input type="text" class="form-control" id="nome_especialidade" name="nome_especialidade" value="<?php echo $nome_edicao; ?>" required>
+    <div class="modal fade" id="modalFormEspecialidade" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalTitulo">Nova Especialidade</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <button type="submit" name="salvar" class="btn btn-primary">
-                    <?php echo $modo_edicao ? "Atualizar Especialidade" : "Salvar Especialidade"; ?>
-                </button>
-                <?php if($modo_edicao): ?>
-                    <a href="cadastro_especialidades.php" class="btn btn-danger">Cancelar</a>
-                <?php endif; ?>
-            </form>
+                <form action="cadastro_especialidades.php" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="acao" id="formAcao" value="novo">
+                        <input type="hidden" name="id" id="formId" value="">
+                        <label>Nome da Especialidade</label>
+                        <input type="text" class="form-control" name="nome" id="formNome" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function prepararNovo() {
+            document.getElementById('formAcao').value = 'novo';
+            document.getElementById('formId').value = '';
+            document.getElementById('formNome').value = '';
+            document.getElementById('modalTitulo').innerText = 'Nova Especialidade';
+        }
+        function prepararEdicao(id, nome) {
+            document.getElementById('formAcao').value = 'editar';
+            document.getElementById('formId').value = id;
+            document.getElementById('formNome').value = nome;
+            document.getElementById('modalTitulo').innerText = 'Editar Especialidade';
+        }
+    </script>
+</body>
+</html><?php
+session_start();
+require_once("conexao.php");
 
-    <h3>Especialidades Cadastradas</h3>
-    <table class="table table-striped border">
-        <thead class="table-dark">
-            <tr>
-                <th>ID</th>
-                <th>Nome</th>
-                <th>Ações</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-            $sql_listar = "SELECT * FROM especialidades";
-            $resultado = mysqli_query($conexao_bd, $sql_listar);
+if(!isset($_SESSION['cod_usuario'])){
+    header("Location: login.php");
+    exit;
+}
 
-            if (mysqli_num_rows($resultado) > 0) {
-                while($linha = mysqli_fetch_assoc($resultado)) {
-                    echo "<tr>";
-                    echo "<td>" . $linha['id'] . "</td>";
-                    echo "<td>" . $linha['nome'] . "</td>";
-                    echo "<td>
-                        <a href='cadastro_especialidades.php?editar=" . $linha['id'] . "' class='btn btn-warning btn-sm'>Editar</a>
-                        <a href='cadastro_especialidades.php?deletar=" . $linha['id'] . "' class='btn btn-danger btn-sm' onclick='return confirm(\"Tem certeza que deseja excluir esta especialidade?\")'>Excluir</a>
-                    </td>";
-                    echo "</tr>";
-                }
-            } else {
-                echo "<tr><td colspan='3' class='text-center'>Nenhuma especialidade cadastrada.</td></tr>";
-            }
-            ?>
-        </tbody>
-    </table>
-</div>
+// Processamento do CRUD (POST e GET para exclusão)
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $acao = $_POST['acao'] ?? '';
+    if ($acao === 'novo') {
+        $nome = $_POST['nome'];
+        $sql = "INSERT INTO especialidades (nome) VALUES ('$nome')";
+        mysqli_query($conexao_bd, $sql);
+    } elseif ($acao === 'editar') {
+        $id = (int)$_POST['id'];
+        $nome = $_POST['nome'];
+        $sql = "UPDATE especialidades SET nome = '$nome' WHERE id = $id";
+        mysqli_query($conexao_bd, $sql);
+    }
+    header("Location: cadastro_especialidades.php");
+    exit;
+}
 
+if (isset($_GET['acao']) && $_GET['acao'] === 'excluir') {
+    $id = (int)$_GET['id'];
+    $sql = "DELETE FROM especialidades WHERE id = $id";
+    mysqli_query($conexao_bd, $sql);
+    header("Location: cadastro_especialidades.php");
+    exit;
+}
+
+// Buscar especialidades cadastradas
+$especialidades = [];
+$sqlBusca = "SELECT * FROM especialidades ORDER BY nome ASC";
+$result = mysqli_query($conexao_bd, $sqlBusca);
+while ($row = mysqli_fetch_assoc($result)) {
+    $especialidades[] = $row;
+}
+?>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>MediAgenda - Especialidades</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root { --azul-primario: #0d6efd; --azul-escuro: #084298; --azul-claro: #e7f1ff; --cinza-fundo: #f5f7fa; --cinza-borda: #e3e6ea; --texto-escuro: #1f2d3d; --sidebar-larg: 250px; }
+        body { background-color: var(--cinza-fundo); font-family: 'Segoe UI', Tahoma, sans-serif; }
+        .navbar-topo { background: linear-gradient(90deg, var(--azul-primario) 0%, var(--azul-escuro) 100%); height: 60px; position: fixed; top: 0; left: 0; right: 0; z-index: 1030; color: white;}
+        .sidebar { position: fixed; top: 60px; left: 0; width: var(--sidebar-larg); height: calc(100vh - 60px); background: #fff; border-right: 1px solid var(--cinza-borda); padding: 20px 0; }
+        .sidebar .nav-link { color: var(--texto-escuro); padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.ativo { background: var(--azul-claro); border-left: 3px solid var(--azul-primario); color: var(--azul-escuro); font-weight: 600; }
+        .conteudo-principal { margin-top: 60px; margin-left: var(--sidebar-larg); padding: 25px; }
+        .card-pagina { background: #fff; border-radius: 12px; padding: 20px 24px; margin-bottom: 20px; border: 1px solid var(--cinza-borda); }
+    </style>
+</head>
+<body>
+    <nav class="navbar-topo d-flex align-items-center px-3">
+        <h4><i class="fa-solid fa-stethoscope"></i> MediAgenda</h4>
+    </nav>
+    
+    <aside class="sidebar" id="sidebar">
+        <ul class="nav flex-column">
+            <li class="nav-item"><a class="nav-link" href="principal.php"><i class="fa-solid fa-calendar-days"></i> Calendário</a></li>
+            <li class="nav-item"><a class="nav-link" href="cadastro_agendas.php"><i class="fa-solid fa-calendar-plus"></i> Agendamentos</a></li>
+            <li class="nav-item"><a class="nav-link" href="cadastro_medicos.php"><i class="fa-solid fa-user-doctor"></i> Cadastro de Médicos</a></li>
+            <li class="nav-item"><a class="nav-link ativo" href="cadastro_especialidades.php"><i class="fa-solid fa-list-check"></i> Cadastro de Especialidades</a></li>
+        </ul>
+    </aside>
+
+    <main class="conteudo-principal">
+        <div class="d-flex justify-content-between mb-4">
+            <h2><i class="fa-solid fa-list-check"></i> Especialidades</h2>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalFormEspecialidade" onclick="prepararNovo()"><i class="fa-solid fa-plus"></i> Nova Especialidade</button>
+        </div>
+        
+        <div class="card-pagina">
+            <table class="table table-hover">
+                <thead style="background: var(--azul-claro);">
+                    <tr><th>ID</th><th>Nome da Especialidade</th><th class="text-center">Ações</th></tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($especialidades as $esp): ?>
+                    <tr>
+                        <td><?= $esp['id'] ?></td>
+                        <td><?= htmlspecialchars($esp['nome']) ?></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="prepararEdicao(<?= $esp['id'] ?>, '<?= htmlspecialchars($esp['nome'], ENT_QUOTES) ?>')" data-bs-toggle="modal" data-bs-target="#modalFormEspecialidade"><i class="fa-solid fa-pen"></i></button>
+                            <a href="cadastro_especialidades.php?acao=excluir&id=<?= $esp['id'] ?>" class="btn btn-sm btn-outline-danger" onclick="return confirm('Excluir especialidade?')"><i class="fa-solid fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <div class="modal fade" id="modalFormEspecialidade" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="modalTitulo">Nova Especialidade</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="cadastro_especialidades.php" method="POST">
+                    <div class="modal-body">
+                        <input type="hidden" name="acao" id="formAcao" value="novo">
+                        <input type="hidden" name="id" id="formId" value="">
+                        <label>Nome da Especialidade</label>
+                        <input type="text" class="form-control" name="nome" id="formNome" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                        <button type="submit" class="btn btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function prepararNovo() {
+            document.getElementById('formAcao').value = 'novo';
+            document.getElementById('formId').value = '';
+            document.getElementById('formNome').value = '';
+            document.getElementById('modalTitulo').innerText = 'Nova Especialidade';
+        }
+        function prepararEdicao(id, nome) {
+            document.getElementById('formAcao').value = 'editar';
+            document.getElementById('formId').value = id;
+            document.getElementById('formNome').value = nome;
+            document.getElementById('modalTitulo').innerText = 'Editar Especialidade';
+        }
+    </script>
 </body>
 </html>
